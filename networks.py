@@ -3,23 +3,39 @@ import torch.nn.functional as F
 
 
 class EmbeddingNet(nn.Module):
-    def __init__(self):
+    def __init__(self, emb_dims):
         super(EmbeddingNet, self).__init__()
-        self.convnet = nn.Sequential(nn.Conv2d(1, 32, 5), nn.PReLU(),
-                                     nn.MaxPool2d(2, stride=2),
-                                     nn.Conv2d(32, 64, 5), nn.PReLU(),
-                                     nn.MaxPool2d(2, stride=2))
+        self.emb_dims = emb_dims
+        self.convnet = nn.Sequential(nn.Conv2d(1, 32, 3, padding='same'), nn.ReLU(), #[29, 29, 1] -> [29, 29, 32]
+                                     nn.MaxPool2d(2, stride=2),                      #[29, 29, 32] -> [14, 14, 32]
+                                     nn.Conv2d(32, 32, 3, padding='same'), nn.ReLU(), #[14, 14, 32] -> [14, 14, 32]
+                                     nn.MaxPool2d(2, stride=2),                       #[14, 14, 32] -> [7, 7, 32]
+                                     nn.Conv2d(32, 64, 3, padding='same'), nn.ReLU(), #[7, 7, 32] -> [7, 7, 64]
+                                     nn.MaxPool2d(2, stride=2),                       #[3, 3, 64]
+                                     )
 
-        self.fc = nn.Sequential(nn.Linear(64 * 4 * 4, 256),
-                                nn.PReLU(),
+        self.fc = nn.Sequential(nn.Linear(64 * 3 * 3, 256),
+                                nn.ReLU(),
                                 nn.Linear(256, 256),
-                                nn.PReLU(),
-                                nn.Linear(256, 2)
-                                )
+                                nn.ReLU(),
+                                nn.Linear(256, emb_dims))
+        
+#         self.convnet = nn.Sequential(nn.Conv2d(1, 32, 5), nn.PReLU(),
+#                                      nn.MaxPool2d(2, stride=2),
+#                                      nn.Conv2d(32, 64, 5), nn.PReLU(),
+#                                      nn.MaxPool2d(2, stride=2))
+
+#         self.fc = nn.Sequential(nn.Linear(64 * 4 * 4, 256),
+#                                 nn.PReLU(),
+#                                 nn.Linear(256, 256),
+#                                 nn.PReLU(),
+#                                 nn.Linear(256, 2)
+#                                 )
 
     def forward(self, x):
         output = self.convnet(x)
         output = output.view(output.size()[0], -1)
+        #print(output.shape)
         output = self.fc(output)
         return output
 
@@ -46,7 +62,7 @@ class ClassificationNet(nn.Module):
         self.embedding_net = embedding_net
         self.n_classes = n_classes
         self.nonlinear = nn.PReLU()
-        self.fc1 = nn.Linear(2, n_classes)
+        self.fc1 = nn.Linear(embedding_net.emb_dims, n_classes)
 
     def forward(self, x):
         output = self.embedding_net(x)
@@ -56,7 +72,9 @@ class ClassificationNet(nn.Module):
 
     def get_embedding(self, x):
         return self.nonlinear(self.embedding_net(x))
-
+    
+    def get_prediction(self, x):
+        return self.fc1(self.get_embedding(x))
 
 class SiameseNet(nn.Module):
     def __init__(self, embedding_net):

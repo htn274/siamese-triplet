@@ -1,6 +1,8 @@
 import torch
+from torch.utils.tensorboard import SummaryWriter
 import numpy as np
-
+import datetime 
+import tqdm
 
 def fit(train_loader, val_loader, model, loss_fn, optimizer, scheduler, n_epochs, cuda, log_interval, metrics=[],
         start_epoch=0):
@@ -16,11 +18,16 @@ def fit(train_loader, val_loader, model, loss_fn, optimizer, scheduler, n_epochs
     for epoch in range(0, start_epoch):
         scheduler.step()
 
+    log_name = '_'.join([str(type(model)).split('.')[-1][:-2], 'emb_dims' + str(model.embedding_net.emb_dims), str(n_epochs) + 'epochs', datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')])
+    log_path = './logs/' + log_name
+    tb_logger = SummaryWriter(log_path)
+    iters = 0
+    
     for epoch in range(start_epoch, n_epochs):
         scheduler.step()
 
         # Train stage
-        train_loss, metrics = train_epoch(train_loader, model, loss_fn, optimizer, cuda, log_interval, metrics)
+        train_loss, metrics, iters = train_epoch(train_loader, model, loss_fn, optimizer, cuda, log_interval, metrics, iters, tb_logger)
 
         message = 'Epoch: {}/{}. Train set: Average loss: {:.4f}'.format(epoch + 1, n_epochs, train_loss)
         for metric in metrics:
@@ -37,7 +44,7 @@ def fit(train_loader, val_loader, model, loss_fn, optimizer, scheduler, n_epochs
         print(message)
 
 
-def train_epoch(train_loader, model, loss_fn, optimizer, cuda, log_interval, metrics):
+def train_epoch(train_loader, model, loss_fn, optimizer, cuda, log_interval, metrics, iters, tb_logger):
     for metric in metrics:
         metric.reset()
 
@@ -45,7 +52,7 @@ def train_epoch(train_loader, model, loss_fn, optimizer, cuda, log_interval, met
     losses = []
     total_loss = 0
 
-    for batch_idx, (data, target) in enumerate(train_loader):
+    for batch_idx, (data, target) in tqdm.tqdm(enumerate(train_loader)):
         target = target if len(target) > 0 else None
         if not type(data) in (tuple, list):
             data = (data,)
@@ -72,22 +79,17 @@ def train_epoch(train_loader, model, loss_fn, optimizer, cuda, log_interval, met
         total_loss += loss.item()
         loss.backward()
         optimizer.step()
-
+        
         for metric in metrics:
             metric(outputs, target, loss_outputs)
 
         if batch_idx % log_interval == 0:
-            message = 'Train: [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
-                batch_idx * len(data[0]), len(train_loader.dataset),
-                100. * batch_idx / len(train_loader), np.mean(losses))
-            for metric in metrics:
-                message += '\t{}: {}'.format(metric.name(), metric.value())
-
-            print(message)
+            tb_logger.add_scalar('training_loss', np.mean(losses), iters)
             losses = []
+        iters += 1
 
     total_loss /= (batch_idx + 1)
-    return total_loss, metrics
+    return total_loss, metrics, iters
 
 
 def test_epoch(val_loader, model, loss_fn, cuda, metrics):
