@@ -35,7 +35,7 @@ def fit(train_loader, val_loader, model, loss_fn, optimizer, scheduler, n_epochs
 
         val_loss, metrics = test_epoch(val_loader, model, loss_fn, cuda, metrics)
         val_loss /= len(val_loader)
-
+        tb_logger.add_scalar('validation_loss', val_loss, iters)
         message += '\nEpoch: {}/{}. Validation set: Average loss: {:.4f}'.format(epoch + 1, n_epochs,
                                                                                  val_loss)
         for metric in metrics:
@@ -60,7 +60,6 @@ def train_epoch(train_loader, model, loss_fn, optimizer, cuda, log_interval, met
             data = tuple(d.cuda() for d in data)
             if target is not None:
                 target = target.cuda()
-
 
         optimizer.zero_grad()
         outputs = model(*data)

@@ -6,10 +6,11 @@ class EmbeddingNet(nn.Module):
     def __init__(self, emb_dims):
         super(EmbeddingNet, self).__init__()
         self.emb_dims = emb_dims
-        self.convnet = nn.Sequential(nn.Conv2d(1, 32, 3, padding='same'), nn.ReLU(), #[29, 29, 1] -> [29, 29, 32]
-                                     nn.MaxPool2d(2, stride=2),                      #[29, 29, 32] -> [14, 14, 32]
-                                     nn.Conv2d(32, 32, 3, padding='same'), nn.ReLU(), #[14, 14, 32] -> [14, 14, 32]
-                                     nn.MaxPool2d(2, stride=2),                       #[14, 14, 32] -> [7, 7, 32]
+        # The input size is [batch_size, 1, 30, 29]
+        self.convnet = nn.Sequential(nn.Conv2d(1, 32, 3, padding='same'), nn.ReLU(), #[30, 29, 1] -> [30, 29, 32]
+                                     nn.MaxPool2d(2, stride=2),                      #[30, 29, 32] -> [15, 14, 32]
+                                     nn.Conv2d(32, 32, 3, padding='same'), nn.ReLU(), #[15, 14, 32] -> [15, 14, 32]
+                                     nn.MaxPool2d(2, stride=2),                       #[15, 14, 32] -> [7, 7, 32]
                                      nn.Conv2d(32, 64, 3, padding='same'), nn.ReLU(), #[7, 7, 32] -> [7, 7, 64]
                                      nn.MaxPool2d(2, stride=2),                       #[3, 3, 64]
                                      )
@@ -19,23 +20,13 @@ class EmbeddingNet(nn.Module):
                                 nn.Linear(256, 256),
                                 nn.ReLU(),
                                 nn.Linear(256, emb_dims))
-        
-#         self.convnet = nn.Sequential(nn.Conv2d(1, 32, 5), nn.PReLU(),
-#                                      nn.MaxPool2d(2, stride=2),
-#                                      nn.Conv2d(32, 64, 5), nn.PReLU(),
-#                                      nn.MaxPool2d(2, stride=2))
-
-#         self.fc = nn.Sequential(nn.Linear(64 * 4 * 4, 256),
-#                                 nn.PReLU(),
-#                                 nn.Linear(256, 256),
-#                                 nn.PReLU(),
-#                                 nn.Linear(256, 2)
-#                                 )
-
+    
     def forward(self, x):
-        output = self.convnet(x)
-        output = output.view(output.size()[0], -1)
-        #print(output.shape)
+        # Assume that maximum window size is 30. Need add some padding to be 30
+        pad = 30 - x.shape[-2]
+        output = nn.ConstantPad2d((0, 0, 0, pad), 255)(x)
+        output = self.convnet(output)
+        output = output.view(output.size()[0], -1) 
         output = self.fc(output)
         return output
 
