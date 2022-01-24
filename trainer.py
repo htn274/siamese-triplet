@@ -3,6 +3,7 @@ from torch.utils.tensorboard import SummaryWriter
 import numpy as np
 import datetime 
 import tqdm
+from siamese_triplet.networks import EmbeddingNet
 
 def fit(train_loader, val_loader, model, loss_fn, optimizer, scheduler, n_epochs, cuda, log_interval, metrics=[],
         start_epoch=0):
@@ -18,7 +19,12 @@ def fit(train_loader, val_loader, model, loss_fn, optimizer, scheduler, n_epochs
     for epoch in range(0, start_epoch):
         scheduler.step()
 
-    log_name = '_'.join([str(type(model)).split('.')[-1][:-2], 'emb_dims' + str(model.embedding_net.emb_dims), str(n_epochs) + 'epochs', datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')])
+    if isinstance(model, EmbeddingNet):
+        emb_dims = model.emb_dims
+    else:
+        emb_dims = model.embedding_net.emb_dims
+
+    log_name = '_'.join([str(type(model)).split('.')[-1][:-2], 'emb_dims' + str(emb_dims), str(n_epochs) + 'epochs', datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')])
     log_path = './logs/' + log_name
     tb_logger = SummaryWriter(log_path)
     iters = 0
